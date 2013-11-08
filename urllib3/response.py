@@ -4,10 +4,11 @@
 # This module is part of urllib3 and is released under
 # the MIT License: http://www.opensource.org/licenses/mit-license.php
 
-
-import logging
-import zlib
+import gzip
 import io
+import logging
+import struct
+import zlib
 
 from .exceptions import DecodeError
 from .packages.six import string_types as basestring, binary_type
@@ -16,6 +17,12 @@ from .util import is_fp_closed
 
 log = logging.getLogger(__name__)
 
+def decode_gzip(data):
+    try:
+        gzipper = gzip.GzipFile(fileobj=io.BytesIO(data))
+        return gzipper.read()
+    except (IOError, struct.error):
+        return gzipper.extrabuf
 
 class DeflateDecoder(object):
 
@@ -196,7 +203,10 @@ class HTTPResponse(io.IOBase):
 
             try:
                 if decode_content and self._decoder:
-                    data = self._decoder.decompress(data)
+                    if content_encoding == 'gzip':
+                        data = decode_gzip(data)
+                    else:
+                        data = self._decoder.decompress(data)
             except (IOError, zlib.error) as e:
                 raise DecodeError(
                     "Received response with content-encoding: %s, but "
